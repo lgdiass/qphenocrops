@@ -1,4 +1,4 @@
-# QGIS Plugin Implementation
+# QPhenoCrops: a QGIS Plugin Implementation
 
 This module provides a graphical interface for NDVI time series analysis and phenological metrics extraction within a GIS environment.
 
@@ -60,7 +60,7 @@ If the plugin does not appear, restart QGIS after copying the folder.
 
 ---
 
-## HOW TO USE
+## ⚙️ How to use
 
 1. Select between using an online catalog (STAC) or local data  
 2. Set crop information and date range
