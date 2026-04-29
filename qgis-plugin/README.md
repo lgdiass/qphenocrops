@@ -24,7 +24,7 @@ It also includes a module to download Sentinel-2 images using Copernicus Data Sp
 
 ---
 ## Required Inputs
-- Shapefile (mandatory in all cases)
+- Shapefile (mandatory in all cases): must contain the field/plot (talhão) from which the NDVI time series and phenological metrics will be extracted.
 - Raster images (only required in Local mode):
 - Bands: B04 (Red) and B08 (NIR)
 
