@@ -43,7 +43,7 @@ var blocks = ee.FeatureCollection('YOUR/ASSET/PATH/gridcerrado');
 
 This grid is used as the spatial reference for selecting analysis areas (`blkID`).
 
-[How to upload the grid to GEE Assets](../docs/gee_upload_guide.md)
+[How to upload the grid to GEE Assets](docs/gee_upload_guide.md)
 
 ---
 
