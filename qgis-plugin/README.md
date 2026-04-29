@@ -23,7 +23,7 @@ The plugin supports:
 It also includes a module to download Sentinel-2 images using Copernicus Data Space credentials.
 
 ---
-## 🔺 Required Inputs
+## Required Inputs
 - Shapefile (mandatory in all cases)
 - Raster images (only required in Local mode):
 - Bands: B04 (Red) and B08 (NIR)
@@ -74,7 +74,7 @@ If the plugin does not appear, restart QGIS after copying the folder.
 
 ---
 
-## ⚙️ How to use
+## How to use
 
 1. Select between using an online catalog (STAC) or local data  
 2. Set crop information and date range
@@ -84,7 +84,7 @@ If the plugin does not appear, restart QGIS after copying the folder.
 
 ---
 
-## 📈 Output
+## Output
 
 * NDVI plots
 * Phenological metrics table
