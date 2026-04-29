@@ -46,6 +46,12 @@ The user must manually edit parameters in the code:
 
 ---
 
+## Recommended Environment
+
+We recommend using Anaconda to run this notebook, as it provides an integrated environment with pre-installed libraries and simplified dependency management. The Jupyter Notebook included in Anaconda allows users to easily edit parameters, execute cells step by step, and visualize results interactively. This setup helps ensure compatibility and reduces potential issues related to package installation and environment configuration.
+
+---
+
 ## Output
 
 * NDVI time series plots
