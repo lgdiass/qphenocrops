@@ -14,17 +14,16 @@ The plugin allows users to:
 * Visualize results through interactive plots
 
 ---
-Data Sources
+## Data Sources
 
 The plugin supports:
-
-Online mode (STAC catalog)
-Local mode (user-provided images)
+- Online mode (STAC catalog)
+- Local mode (user-provided images)
 
 It also includes a module to download Sentinel-2 images using Copernicus Data Space credentials.
 
 ---
-🔺 Required Inputs
+## 🔺 Required Inputs
 - Shapefile (mandatory in all cases)
 - Raster images (only required in Local mode):
 - Bands: B04 (Red) and B08 (NIR)
