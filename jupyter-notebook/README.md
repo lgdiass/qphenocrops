@@ -29,8 +29,8 @@ The notebook performs the following steps:
 The user must manually edit parameters in the code:
 
 * **Date range**
-* **Aggregation method** (mean or median)
-* **Smoothing method** (savgol, dma3, dma5)
+* **Aggregation method** (Mean or Median)
+* **Smoothing method** (DMA3, DMA5 or Savitzky-Golay)
 
 ---
 
