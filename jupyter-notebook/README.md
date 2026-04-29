@@ -20,11 +20,11 @@ The notebook performs the following steps:
 
 ## Required Inputs
 
-* **Shapefile (mandatory): **must represent the agricultural field (plot) used as the area of interest for NDVI time series extraction and phenological analysis.
+* **Shapefile (mandatory): ** must represent the agricultural field (plot) used as the area of interest for NDVI time series extraction and phenological analysis.
 
 ---
 
-## ⚠️ User Configuration
+## User Configuration
 
 The user must manually edit parameters in the code:
 
@@ -34,19 +34,19 @@ The user must manually edit parameters in the code:
 
 ---
 
-## 🚀 How to Use
+## How to Use
 
 1. Open:
 
    ```bash
    QPhenoCrops.ipynb
    ```
-2. Update parameters
+2. Update parameters (date range, aggregation method and smoothing mode)
 3. Run all cells sequentially
 
 ---
 
-## 📊 Output
+## Output
 
 * NDVI time series plots
 * Phenological metrics table
