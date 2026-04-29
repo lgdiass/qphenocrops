@@ -20,7 +20,7 @@ The notebook performs the following steps:
 
 ## Required Inputs
 
-* **Shapefile (mandatory): ** must represent the agricultural field (plot) used as the area of interest for NDVI time series extraction and phenological analysis.
+* **Shapefile (mandatory):** must represent the agricultural field (plot) used as the area of interest for NDVI time series extraction and phenological analysis.
 
 ---
 
