@@ -6,7 +6,7 @@ It leverages Sentinel-2 imagery and vegetation indices (such as NDVI) to identif
 
 ---
 
-## 🔷 Overview
+## Overview
 
 QPhenoCrops enables the automatic extraction of phenological metrics from vegetation index time series.
 By analyzing temporal dynamics, the framework detects key transitions in vegetation growth and senescence.
@@ -23,7 +23,7 @@ These metrics provide valuable insights for agricultural monitoring, crop charac
 
 ---
 
-## 🔷 Applications
+## Applications
 
 QPhenoCrops is designed to support:
 
@@ -32,7 +32,7 @@ QPhenoCrops is designed to support:
 
 ---
 
-## 🔷 Implementations
+## 🔹 Implementations
 
 This repository provides three complementary implementations:
 
@@ -50,7 +50,7 @@ A cloud-based implementation for large-scale analysis and processing of satellit
 
 ---
 
-## 🔷 Getting Started
+## Getting Started
 
 Each implementation has its own setup and usage instructions:
 
@@ -60,19 +60,19 @@ Each implementation has its own setup and usage instructions:
 
 ---
 
-## 🔷 Data Source
+## Data Source
 
 * Sentinel-2 Level-2A imagery
 * Vegetation indices derived from spectral bands (e.g., NDVI)
 
 ---
 
-## 🔷 Notes
+## 📌 Notes
 
 QPhenoCrops is designed to be flexible and can be applied to different temporary crops and study areas, depending on user-defined parameters and input data.
 
 ---
 
-## 🔷 License
+## 🔸 License
 
 This project is open-source and available under the MIT License.
