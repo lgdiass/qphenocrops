@@ -74,13 +74,15 @@ The script will then:
 
 ## How to Use
 
-1. Open Google Earth Engine Code Editor
-2. Create a new script
-3. Paste `qphenocrops_gee.js`
-4. Upload the Cerrado grid to your Assets and update the path
-5. Run the script (first execution → preview)
-6. Draw a polygon
-7. Run again (analysis will be performed)
+1. Open the Google Earth Engine Code Editor  
+2. Create a new script  
+3. Paste the `qphenocrops_gee.js` code  
+4. Upload the Cerrado grid to your Assets and update the path in the script  
+5. Run the script (first execution → preview only)  
+6. Use the **Geometry Drawing Tool** (polygon icon) to draw a polygon on the map  
+7. In the *Imports* panel, rename the drawn geometry to `samples`  
+8. Convert it to a **FeatureCollection** (if needed, wrap it using `ee.FeatureCollection([samples])` in the script)  
+9. Run the script again (analysis will be performed based on the drawn samples)  
 
 ---
 
