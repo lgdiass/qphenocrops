@@ -69,7 +69,10 @@ In the script, define the block ID:
 > The Cerrado grid shapefile already contains an attribute table with a field called `pol_id`.  
 > Each polygon (grid cell) has a unique `pol_id` value.  
 >
-> You can open the shapefile in QGIS or any GIS software to **check which `pol_id` corresponds to the block you want to analyze**.
+>  You can open the shapefile in **QGIS** or any GIS software.  
+> Simply use the **Identify Features** tool and click on a block — the corresponding `pol_id` will appear in the panel on the right.
+
+<img width="1484" height="859" alt="Design sem nome (5)" src="https://github.com/user-attachments/assets/18101aaf-947a-40ca-8e72-3eb627a15828" />
 
 ---
 
