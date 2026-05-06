@@ -21,7 +21,7 @@ The script performs:
 
 The script requires the following input:
 
-### 🔹 Cerrado Grid (Required)
+### Cerrado Grid (Required)
 
 A spatial grid is required to define the analysis blocks.
 
@@ -51,7 +51,7 @@ This grid is used as the spatial reference for selecting analysis areas (`blkID`
 
 * The user must **draw a polygon manually in the GEE interface**
 
-### 🔸 First execution
+### 1️⃣ First execution
 
 * When running the script for the first time:
 
@@ -59,7 +59,7 @@ This grid is used as the spatial reference for selecting analysis areas (`blkID`
   * A Sentinel-2 image of the selected block will be displayed
   * This allows the user to visually identify the area of interest
 
-### 🔸 After drawing the polygon
+### 2️⃣ After drawing the polygon
 
 * Draw a polygon over the desired area (e.g., crop field)
 * Run the script again
