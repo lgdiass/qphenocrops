@@ -36,7 +36,9 @@ The user must manually edit parameters in the code:
 
 ## How to Use
 
-1. Download the Jupyter Notebook from **[HERE]([https://raw.githubusercontent.com/lgdiass/qphenocrops/blob/main/jupyter-notebook/phenocrops-API.ipynb)**
+1. Download the Jupyter Notebook
+   [Access notebook](https://github.com/lgdiass/qphenocrops/blob/main/jupyter-notebook/phenocrops-API.ipynb)
+   
 2. Open:
    ```bash
    phenocrops-API.ipynb
