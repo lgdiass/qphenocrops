@@ -36,13 +36,13 @@ The user must manually edit parameters in the code:
 
 ## How to Use
 
-1. Open:
-
+1. Download the Jupyter Notebook from **[HERE]([https://raw.githubusercontent.com/lgdiass/qphenocrops/blob/main/jupyter-notebook/phenocrops-API.ipynb)**
+2. Open:
    ```bash
-   QPhenoCrops.ipynb
+   phenocrops-API.ipynb
    ```
-2. Update parameters (date range, aggregation method and smoothing mode)
-3. Run all cells sequentially
+3. Update parameters (date range, aggregation method and smoothing mode)
+4. Run all cells sequentially
 
 ---
 
