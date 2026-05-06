@@ -316,7 +316,7 @@ function runAnalysis(samples) {
         });
         
         var metricsFC = ee.FeatureCollection([metricsFeature]);
-        /*
+        
         // Use this script to export phenological metrics to drive
         Export.table.toDrive({
           collection: metricsFC,
@@ -324,7 +324,6 @@ function runAnalysis(samples) {
           folder: 'phenoCrops',
           fileFormat: 'CSV'
         });
-        */
   
         var baseDate = new Date(dateArray[0]);
         function daysSinceStart(dateStr) {
@@ -355,7 +354,6 @@ function runAnalysis(samples) {
           })
         );
         
-        /*
         // Use this script to export ndvi values to drive
         Export.table.toDrive({
           collection: exportFC,
@@ -363,7 +361,6 @@ function runAnalysis(samples) {
           folder: 'phenoCrops',
           fileFormat: 'CSV'
         });
-        */
   
         var phenologyPoints = [
           {day: daysSinceStart(dateArray[metrics.SOS]), NDVI: smoothedNDVI[metrics.SOS], type: 'SOS'},
