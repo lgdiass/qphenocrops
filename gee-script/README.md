@@ -147,7 +147,7 @@ Other parameters exist in the script but are predefined and should not be modifi
 
 After exporting the NDVI time series and phenological metrics from Google Earth Engine, the data can be processed and visualized using Google Colab.
 
-[Download the Colab Notebook here](https://raw.githubusercontent.com/lgdiass/qphenocrops/main/gee-script/phenoCrops-colab-processing.ipynb)
+[Access notebook](https://github.com/lgdiass/qphenocrops/blob/main/gee-script/phenoCrops-colab-processing.ipynb)
 
 This notebook allows you to:
 
