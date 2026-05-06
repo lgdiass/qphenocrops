@@ -7,8 +7,8 @@ var endDate = '2021-11-30';  // Change
 var Nimages = 50; 
 var cloudThreshold = 10;
 
-var aggregation = "mean"; // Change --> "mean" ou "median"
-var smoothing = "savgol"; // Change --> "savgol", "dma3", "dma5"
+var aggregation = "median"; // Change --> "mean" ou "median"
+var smoothing = "dma3"; // Change --> "savgol", "dma3", "dma5"
 
 var blocks = ee.FeatureCollection('projects/ee-lgdiass/assets/gridcerrado');
 
@@ -316,12 +316,15 @@ function runAnalysis(samples) {
         });
         
         var metricsFC = ee.FeatureCollection([metricsFeature]);
-        
+        /*
+        // Use this script to export phenological metrics to drive
         Export.table.toDrive({
           collection: metricsFC,
           description: 'ndvi_metrics',
+          folder: 'phenoCrops',
           fileFormat: 'CSV'
         });
+        */
   
         var baseDate = new Date(dateArray[0]);
         function daysSinceStart(dateStr) {
@@ -352,11 +355,15 @@ function runAnalysis(samples) {
           })
         );
         
+        /*
+        // Use this script to export ndvi values to drive
         Export.table.toDrive({
           collection: exportFC,
           description: 'NDVI_series',
+          folder: 'phenoCrops',
           fileFormat: 'CSV'
         });
+        */
   
         var phenologyPoints = [
           {day: daysSinceStart(dateArray[metrics.SOS]), NDVI: smoothedNDVI[metrics.SOS], type: 'SOS'},
