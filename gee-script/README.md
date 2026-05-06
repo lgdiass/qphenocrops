@@ -134,6 +134,31 @@ Other parameters exist in the script but are predefined and should not be modifi
 
 ---
 
+## Additionally:
+
+* The NDVI time series and extracted metrics can be exported as CSV files to your **Google Drive**
+* After running the script, go to the **Tasks** tab in the GEE interface and click **Run** to start the export
+* These outputs can be further analyzed and visualized in environments such as Google Colab or Python notebooks
+* High-resolution figures (e.g., 600 dpi) can be generated during post-processing, allowing publication-quality visualization if needed
+
+---
+
+## Post-processing in Google Colab
+
+After exporting the NDVI time series and phenological metrics from Google Earth Engine, the data can be processed and visualized using Google Colab.
+
+[Download the Colab Notebook here](https://raw.githubusercontent.com/lgdiass/qphenocrops/main/gee-script/phenoCrops-colab-processing.ipynb)
+
+This notebook allows you to:
+
+* Load exported CSV files from Google Drive  
+* Reconstruct the NDVI time series  
+* Apply smoothing (if needed)  
+* Generate high-resolution figures (600 dpi)  
+* Visualize phenological metrics (SOS, POS, EOS)  
+
+---
+
 ## 📌 Notes
 
 * The grid is mandatory and must be uploaded before running the script
