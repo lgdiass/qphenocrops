@@ -3,14 +3,14 @@
 // ===============================
 var blkID = "8346";
 var startDate = '2021-05-01'; // Change
-var endDate = '2021-11-30';  // Change
+var endDate = '2021-12-01';  // Change
 var Nimages = 50; 
 var cloudThreshold = 10;
 
-var aggregation = "median"; // Change --> "mean" ou "median"
-var smoothing = "dma3"; // Change --> "savgol", "dma3", "dma5"
+var aggregation = "mean"; // Change --> "mean" ou "median"
+var smoothing = "savgol"; // Change --> "savgol", "dma3", "dma5"
 
-var blocks = ee.FeatureCollection('projects/ee-lgdiass/assets/gridcerrado');
+var blocks = ee.FeatureCollection('projects/user/assets/gridcerrado'); //CHANGE HERE (Put your username in place of “user”)
 
 // ===============================
 // Check if user drew geometry
@@ -64,53 +64,6 @@ function runAnalysis(samples) {
     var NDVI = image.normalizedDifference(['B8', 'B4']).rename('NDVI');
     return image.addBands(NDVI).copyProperties(image, ['system:time_start', 'date']);
   };
-  
-  function linearInterpolation(dates, values) {
-  
-    var interpolated = [];
-    
-    for (var i = 0; i < values.length; i++) {
-  
-      if (values[i] !== null && !isNaN(values[i])) {
-        interpolated.push(values[i]);
-        continue;
-      }
-  
-      var prev = null;
-      var next = null;
-      var prevIdx = null;
-      var nextIdx = null;
-  
-      for (var j = i - 1; j >= 0; j--) {
-        if (values[j] !== null && !isNaN(values[j])) {
-          prev = values[j];
-          prevIdx = j;
-          break;
-        }
-      }
-  
-      for (var j = i + 1; j < values.length; j++) {
-        if (values[j] !== null && !isNaN(values[j])) {
-          next = values[j];
-          nextIdx = j;
-          break;
-        }
-      }
-  
-      if (prev !== null && next !== null) {
-        var ratio = (i - prevIdx) / (nextIdx - prevIdx);
-        interpolated.push(prev + ratio * (next - prev));
-      } else if (prev !== null) {
-        interpolated.push(prev);
-      } else if (next !== null) {
-        interpolated.push(next);
-      } else {
-        interpolated.push(null);
-      }
-    }
-  
-    return interpolated;
-  }
   
   function addSentinel2LayersToMap(startDate, endDate, bufferedPolygon, Nimages, cloudThreshold){
     var s2Collection = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
@@ -214,8 +167,7 @@ function runAnalysis(samples) {
     })
   );
   
-  var filteredNDVI = ndviFeatures
-    .filter(ee.Filter.notNull(['meanNDVI']));
+  var filteredNDVI = ndviFeatures;
   
   // ===============================
   // Function to filter FeatureCollection by months (Earth Engine native)
@@ -238,37 +190,69 @@ function runAnalysis(samples) {
     filteredNDVI.aggregate_array('date').getInfo(function(dateArray) {
       filteredNDVI.aggregate_array('meanNDVI').getInfo(function(ndviArray) {
   
-        function savitzkyGolay(y, windowSize) {
-          var halfWindow = Math.floor(windowSize / 2);
-          var result = [];
-          for (var i = 0; i < y.length; i++) {
-            var s = 0, count = 0;
-            for (var j = -halfWindow; j <= halfWindow; j++) {
-              var idx = i + j;
-              if (idx >= 0 && idx < y.length) {
-                s += y[idx];
-                count++;
-              }
-            }
-            result.push(s / count);
-          }
-          return result;
-        }
-  
-        // Interpolation
-        var interpolatedNDVI = linearInterpolation(dateArray, ndviArray);
+        // Use original NDVI values directly
+        var interpolatedNDVI = ndviArray;
         
         // Smoothing
         var smoothedNDVI;
   
         if (smoothing === "savgol") {
-          smoothedNDVI = savitzkyGolay(interpolatedNDVI, 5);
+        
+          var windowSize = 7;
+          var halfWindow = Math.floor(windowSize / 2);
+          var order = 3;
+        
+          smoothedNDVI = [];
+        
+          for (var i = 0; i < ndviArray.length; i++) {
+        
+            var start = Math.max(0, i - halfWindow);
+            var end = Math.min(ndviArray.length, i + halfWindow + 1);
+        
+            var predictors = [];
+            var response = [];
+        
+            for (var j = start; j < end; j++) {
+        
+              var t = j - i;
+        
+              predictors.push([
+                1,
+                t,
+                Math.pow(t, 2),
+                Math.pow(t, 3)
+              ]);
+        
+              response.push([
+                ndviArray[j]
+              ]);
+            }
+        
+            // precisa de pontos suficientes
+            if (predictors.length < order + 1) {
+              smoothedNDVI.push(ndviArray[i]);
+              continue;
+            }
+        
+            // ee.Array
+            var X = ee.Array(predictors);
+        
+            var Y = ee.Array(response);
+        
+            // regressão local
+            var coeffs = X.matrixSolve(Y);
+        
+            // valor suavizado no centro
+            var smoothValue = coeffs.get([0, 0]);
+        
+            smoothedNDVI.push(smoothValue.getInfo());
+          }
         
         } else if (smoothing === "dma3") {
-          smoothedNDVI = movingAverage(interpolatedNDVI, 3);
+          smoothedNDVI = movingAverage(ndviArray, 3);
         
         } else if (smoothing === "dma5") {
-          smoothedNDVI = movingAverage(interpolatedNDVI, 5);
+          smoothedNDVI = movingAverage(ndviArray, 5);
         }
         function extractMetrics(dates, values) {
           var max = -Infinity, posIdx = 0;
@@ -316,7 +300,7 @@ function runAnalysis(samples) {
         });
         
         var metricsFC = ee.FeatureCollection([metricsFeature]);
-        
+
         // Use this script to export phenological metrics to drive
         Export.table.toDrive({
           collection: metricsFC,
@@ -331,13 +315,19 @@ function runAnalysis(samples) {
         }
   
         var chartData = [];
+
         for (var i = 0; i < dateArray.length; i++) {
+        
           chartData.push({
+        
             day: daysSinceStart(dateArray[i]),
+            date: dateArray[i],
+        
+            // REAL Sentinel-2 point
             NDVI_original: ndviArray[i],
+
+            // Smoothed curve
             NDVI_smoothed: smoothedNDVI[i],
-            type: 'Original',
-            date: dateArray[i]
           });
         }
         
@@ -345,11 +335,16 @@ function runAnalysis(samples) {
         // Exporting time series
         // ===============================
         var exportFC = ee.FeatureCollection(
+        
           chartData.map(function(d) {
             return ee.Feature(null, {
               'date': d.date,
+        
+              // Raw Sentinel-2 observation
               'NDVI_original': d.NDVI_original,
-              'NDVI_smoothed': d.NDVI_smoothed
+        
+              // Smoothed curve
+              'NDVI_smoothed': d.NDVI_smoothed,
             });
           })
         );
@@ -361,6 +356,7 @@ function runAnalysis(samples) {
           folder: 'phenoCrops',
           fileFormat: 'CSV'
         });
+
   
         var phenologyPoints = [
           {day: daysSinceStart(dateArray[metrics.SOS]), NDVI: smoothedNDVI[metrics.SOS], type: 'SOS'},
@@ -368,15 +364,27 @@ function runAnalysis(samples) {
           {day: daysSinceStart(dateArray[metrics.EOS]), NDVI: smoothedNDVI[metrics.EOS], type: 'EOS'}
         ];
   
+        // REAL Sentinel-2 observations
         var originalFC = ee.FeatureCollection(
           chartData.map(function(d) {
-            return ee.Feature(null, {'day': d.day, 'NDVI': d.NDVI_original, 'type': 'Original'});
+        
+            return ee.Feature(null, {
+              'day': d.day,
+              'NDVI': d.NDVI_original,
+              'type': 'Original'
+            });
+        
           })
         );
-  
+        
+        // Smoothed curve
         var smoothedFC = ee.FeatureCollection(
           chartData.map(function(d) {
-            return ee.Feature(null, {'day': d.day, 'NDVI': d.NDVI_smoothed, 'type': 'Smoothed'});
+            return ee.Feature(null, {
+              'day': d.day,
+              'NDVI': d.NDVI_smoothed,
+              'type': 'Smoothed'
+            });
           })
         );
   
@@ -386,8 +394,9 @@ function runAnalysis(samples) {
           })
         );
   
-        var allFC = originalFC.merge(smoothedFC).merge(phenologyFC);
-  
+        var allFC = originalFC
+          .merge(smoothedFC)
+          .merge(phenologyFC);
         
         var chart = ui.Chart.feature.groups(allFC, 'day', 'NDVI', 'type')
           .setChartType('LineChart')
@@ -396,13 +405,41 @@ function runAnalysis(samples) {
             hAxis: {title: 'Days since start', gridlines: {count: 10}},
             vAxis: {title: 'NDVI (' + aggregation + ')'},
             pointSize: 4,
+            
             series: {
-              0: { color: 'gray', pointShape: 'circle', lineWidth: 0 },   // Original
-              1: { color: 'black', pointShape: 'circle', lineWidth: 1 },   // Smoothed
-              2: { color: 'green', pointShape: 'circle', lineWidth: 3 },// SOS
-              3: { color: 'purple', pointShape: 'circle', lineWidth: 3 },   // POS
-              4: { color: 'orange', pointShape: 'circle', lineWidth: 3 } // EOS
+              // Original Sentinel-2 points
+              0: {
+                color: 'black',
+                pointShape: 'circle',
+                lineWidth: 0,
+                pointSize: 5
+              },
+              // Smoothed curve
+              1: {
+                color: 'gray',
+                lineWidth: 2,
+                pointSize: 0
+              },
+              // SOS
+              2: {
+                color: 'green',
+                lineWidth: 0,
+                pointSize: 7
+              },
+              // POS
+              3: {
+                color: 'purple',
+                lineWidth: 0,
+                pointSize: 7
+              },
+              // EOS
+              4: {
+                color: 'red',
+                lineWidth: 0,
+                pointSize: 7
+              }
             },
+            
             legend: {position: 'bottom'}
           });
   
