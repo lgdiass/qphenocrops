@@ -1,6 +1,6 @@
-# QPhenoCrops
+# PhenoCrops
 
-**QPhenoCrops** is a framework for analyzing satellite-derived vegetation time series and extracting phenological metrics from temporary agricultural crops.
+**PhenoCrops** is a framework for analyzing satellite-derived vegetation time series and extracting phenological metrics from temporary agricultural crops.
 
 It leverages Sentinel-2 imagery and vegetation indices (such as NDVI) to identify key crop development stages based on temporal patterns, enabling consistent and reproducible phenological analysis.
 
@@ -8,7 +8,7 @@ It leverages Sentinel-2 imagery and vegetation indices (such as NDVI) to identif
 
 ## Overview
 
-QPhenoCrops enables the automatic extraction of phenological metrics from vegetation index time series.
+PhenoCrops enables the automatic extraction of phenological metrics from vegetation index time series.
 By analyzing temporal dynamics, the framework detects key transitions in vegetation growth and senescence.
 
 The following metrics are derived:
