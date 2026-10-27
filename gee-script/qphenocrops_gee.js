@@ -372,10 +372,9 @@ print('Number of dates:', filteredNDVI.size());
     filteredNDVI.aggregate_array('date').getInfo(function(dateArray) {
       filteredNDVI.aggregate_array('meanNDVI').getInfo(function(ndviArray) {
   
-        // ===============================
-        // Remove invalid observations
-        // BEFORE smoothing
-        // ===============================
+        // ============================================
+        // Remove invalid observations BEFORE smoothing
+        // ============================================
         
         var validDates = [];
         var validNDVI = [];
@@ -558,7 +557,6 @@ print('Number of dates:', filteredNDVI.size());
       
         // ==========================================
         // Helper: quadratic least-squares fit
-        // for x = 0,1,2,3,4,5,6
         // ==========================================
       
         function quadraticFit7(values) {
@@ -646,7 +644,6 @@ print('Number of dates:', filteredNDVI.size());
       
       
         // ==========================================
-        // INTERIOR
         // SavGol window=7, poly=2
         //
         // coefficients:
@@ -732,12 +729,12 @@ print('Number of dates:', filteredNDVI.size());
       
 
 
-        // 2. Extração de Métricas Padronizada (Derivada Temporal Real)
+        // Standarf phenological metrics extraction
         function extractMetrics(dates, values) {
           var n = values.length;
           if (n < 5) return null;
 
-          // Converter datas para contagem real de dias corridos
+          // datetime to since of start
           var baseMetricTime =
             Date.parse(dates[0] + 'T00:00:00Z');
           
@@ -752,7 +749,6 @@ print('Number of dates:', filteredNDVI.size());
           });
 
           // Real temporal derivative equivalent to numpy.gradient
-          // for irregular temporal spacing
           var derivative = [];
           
           for (var i = 0; i < n; i++) {
@@ -788,7 +784,7 @@ print('Number of dates:', filteredNDVI.size());
             }
           }
 
-          // A. POS (Pico global na série suavizada)
+          // POS
           var maxVal = -Infinity;
           var posIdx = 0;
           for (var i = 0; i < n; i++) {
@@ -798,7 +794,7 @@ print('Number of dates:', filteredNDVI.size());
             }
           }
 
-          // B. SOS (First point of sustained pre-peak growth)
+          // SOS
           var sosIdx = null;
           var consecutiveGrowth = 0;
           
@@ -836,7 +832,7 @@ print('Number of dates:', filteredNDVI.size());
             }
           }
 
-          // C. EOS (Pós-pico: queda < -0.002 até estabilização com derivada >= 0)
+          // EOS
           var eosIdx = null;
           var consecutiveDecline = 0;
           var foundDecline = false;
