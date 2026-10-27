@@ -1,16 +1,36 @@
 // ===============================
 // Initial parameters (teste)
 // ===============================
+// var blkID = "8571";
 var blkID = "8346";
+
 var startDate = '2021-05-01'; // Change
 var endDate = '2021-12-01';  // Change
 var Nimages = 50; 
 var cloudThreshold = 10;
 
-var aggregation = "mean"; // Change --> "mean" ou "median"
+var aggregation = "median"; // Change --> "mean" ou "median"
 var smoothing = "savgol"; // Change --> "savgol", "dma3", "dma5"
 
-var blocks = ee.FeatureCollection('projects/user/assets/gridcerrado'); //CHANGE HERE (Put your username in place of “user”)
+// ===============================
+// Standardized parameters
+// ===============================
+
+// Outlier filtering
+var filterOutliers = true;
+var outlierWindow = 5;
+var outlierThreshold = 0.12;
+
+// Savitzky-Golay
+var savgolWindow = 7;
+var savgolPoly = 2;
+
+// Phenological metrics
+var minConsecutive = 2;
+var positiveDerivThreshold = 0.002;
+var negativeDerivThreshold = -0.002;
+
+var blocks = ee.FeatureCollection('projects/ee-lgdiass/assets/gridcerrado');
 
 // ===============================
 // Check if user drew geometry
@@ -56,13 +76,25 @@ function runAnalysis(samples) {
     return blk.buffer(5000);
   };
   
-  function setDate(image){
-    return image.set('date', ee.Date(image.get('system:time_start')).format('yyyy-MM-dd'));
+  function setDate(image) {
+    return image
+      .set(
+        'date',
+        ee.Date(image.get('system:time_start')).format('yyyy-MM-dd')
+      )
+      .set(
+        'timestamp',
+        image.get('system:time_start')
+      );
   }
   
   var calculateNDVI = function(image) {
     var NDVI = image.normalizedDifference(['B8', 'B4']).rename('NDVI');
-    return image.addBands(NDVI).copyProperties(image, ['system:time_start', 'date']);
+    return image.addBands(NDVI)
+      .copyProperties(
+        image,
+        ['system:time_start', 'date', 'timestamp']
+      );
   };
   
   function addSentinel2LayersToMap(startDate, endDate, bufferedPolygon, Nimages, cloudThreshold){
@@ -149,143 +181,716 @@ function runAnalysis(samples) {
       maxPixels: 1e13
     });
   
-    return image.set('meanNDVI', result.get('NDVI'))
-                .set('date', image.get('date'));
+    return image
+      .set('meanNDVI', result.get('NDVI'))
+      .set('date', image.get('date'))
+      .set('timestamp', image.get('system:time_start'));
   }
   
-  var s2WithMeanNDVI = s2Collection.map(calculateMeanNDVI);
+  // Sort the collection chronologically before extracting arrays
+  var s2WithMeanNDVI = s2Collection
+    .map(calculateMeanNDVI)
+    .sort('system:time_start');
+    
+    // ===============================
+    // Verify date-NDVI association
+    // ===============================
+    
+    var dateNDVICheck = ee.FeatureCollection(
+      s2WithMeanNDVI.map(function(image) {
+    
+        return ee.Feature(null, {
+    
+          'system_index':
+            image.get('system:index'),
+    
+          'system_time_start':
+            image.get('system:time_start'),
+    
+          'original_datetime':
+            ee.Date(
+              image.get('system:time_start')
+            ).format('yyyy-MM-dd HH:mm:ss'),
+    
+          'assigned_date':
+            image.get('date'),
+    
+          'NDVI':
+            image.get('meanNDVI'),
+    
+          'cloud':
+            image.get('CLOUDY_PIXEL_PERCENTAGE')
+        });
+    
+      })
+    );
+    
+    print(
+      'DATE x NDVI CHECK:',
+      dateNDVICheck
+    );
   
-  var ndviList = s2WithMeanNDVI.aggregate_array('meanNDVI');
-  var dateList = s2WithMeanNDVI.aggregate_array('date');
+  // Check the actual Sentinel-2 acquisition dates
+  var checkDates = s2WithMeanNDVI
+    .sort('system:time_start')
+    .map(function(image) {
+      return ee.Feature(null, {
+        'system_time_start': image.get('system:time_start'),
+        'sentinel_date': ee.Date(
+          image.get('system:time_start')
+        ).format('yyyy-MM-dd HH:mm:ss'),
+        'meanNDVI': image.get('meanNDVI')
+      });
+    });
+  
+  print('SENTINEL-2 DATES AND NDVI:', checkDates);
+  
+  // ===============================
+  // Build NDVI features directly
+  // ===============================
+  
+  // Remove images without valid NDVI before creating the arrays
+  var validS2WithMeanNDVI = s2WithMeanNDVI
+    .filter(ee.Filter.notNull([
+      'meanNDVI',
+      'date',
+      'system:time_start'
+    ]))
+    .sort('system:time_start');
+  
+  
+  // ===============================
+  // Select only ONE valid image per date
+  // ===============================
+  
+  // Get all unique dates with valid NDVI
+  var uniqueValidDates = ee.List(
+    validS2WithMeanNDVI.aggregate_array('date')
+  )
+  .distinct()
+  .sort();
   
   var ndviFeatures = ee.FeatureCollection(
-    ee.List.sequence(0, ndviList.size().subtract(1)).map(function(i) {
+    uniqueValidDates.map(function(date) {
+  
+      var dailyCollection = validS2WithMeanNDVI
+        .filter(ee.Filter.eq('date', date));
+  
+      var dailyMeanNDVI = dailyCollection
+        .aggregate_mean('meanNDVI');
+  
+      // Timestamp da data de aquisição
+      var firstImage = ee.Image(
+        dailyCollection.sort('system:time_start').first()
+      );
+  
       return ee.Feature(null, {
-        'date': dateList.get(i),
-        'meanNDVI': ndviList.get(i)
+        'date': date,
+        'timestamp': firstImage.get('system:time_start'),
+        'meanNDVI': dailyMeanNDVI,
+        'n_images': dailyCollection.size()
       });
     })
   );
+
+var filteredNDVI = ndviFeatures
+  .filter(ee.Filter.notNull(['meanNDVI']))
+  .sort('timestamp');
+
+print('DAILY MEAN - QGIS STANDARD:', filteredNDVI);
+print('Number of dates:', filteredNDVI.size());
   
-  var filteredNDVI = ndviFeatures;
+  // Ensure chronological order
+  var filteredNDVI =
+    ndviFeatures.sort('timestamp');
+  
+  
+  // Diagnostic
+  print(
+    'ONE IMAGE PER DATE:',
+    filteredNDVI
+  );
+  
+  print(
+    'Number of dates:',
+    filteredNDVI.size()
+  );
+  
   
   // ===============================
-  // Function to filter FeatureCollection by months (Earth Engine native)
+  // Check input series
   // ===============================
-  function filterByMonths(fc, months) {
-    var datesList = fc.aggregate_array('date').getInfo();
-    
-    var filteredDates = datesList.filter(function(d) {
-      var month = parseInt(d.split('-')[1], 10);
-      return months.indexOf(month) !== -1;
-    });
-    
-    return fc.filter(ee.Filter.inList('date', filteredDates));
-  }
   
-  // ===================================================
+  print(
+    'Original Sentinel-2 images:',
+    s2WithMeanNDVI.size()
+  );
+  
+  print(
+    'Valid NDVI observations:',
+    filteredNDVI.size()
+  );
+  
+  print(
+    'First input date:',
+    filteredNDVI.first().get('date')
+  );
+  
+  print(
+    'Last input date:',
+    filteredNDVI
+      .sort('timestamp', false)
+      .first()
+      .get('date')
+  );
+  
+  // Ensure chronological order before sending data to the client
+  filteredNDVI = filteredNDVI.sort('timestamp');
+  
+  print(
+    'First input date:',
+    filteredNDVI.first().get('date')
+  );
+  
+  print(
+    'Last input date:',
+    filteredNDVI
+      .sort('timestamp', false)
+      .first()
+      .get('date')
+  );
+  
+  print(
+    'Number of input observations:',
+    filteredNDVI.size()
+  );
+  
+// ===================================================
   // Function to generate chart and phenological metrics
   // ===================================================
   function generateChartAndPhenology(filteredNDVI, title) {
     filteredNDVI.aggregate_array('date').getInfo(function(dateArray) {
       filteredNDVI.aggregate_array('meanNDVI').getInfo(function(ndviArray) {
   
-        // Use original NDVI values directly
-        var interpolatedNDVI = ndviArray;
+        // ===============================
+        // Remove invalid observations
+        // BEFORE smoothing
+        // ===============================
         
-        // Smoothing
-        var smoothedNDVI;
-  
-        if (smoothing === "savgol") {
+        var validDates = [];
+        var validNDVI = [];
         
-          var windowSize = 7;
-          var halfWindow = Math.floor(windowSize / 2);
-          var order = 3;
+        var safeLength = Math.min(
+          dateArray.length,
+          ndviArray.length
+        );
         
-          smoothedNDVI = [];
+        for (var i = 0; i < safeLength; i++) {
+        
+          var currentDate = dateArray[i];
+          var currentValue = ndviArray[i];
+        
+          if (
+            currentDate !== undefined &&
+            currentDate !== null &&
+            currentValue !== undefined &&
+            currentValue !== null &&
+            isFinite(Number(currentValue))
+          ) {
+        
+            validDates.push(currentDate);
+            validNDVI.push(Number(currentValue));
+          }
+        }
+        
+        
+        // ===============================
+        // Group observations by date
+        // ===============================
+        
+        var groupedByDate = {};
+        
+        for (var i = 0; i < validDates.length; i++) {
+        
+          var date = validDates[i];
+          var value = validNDVI[i];
+        
+          if (!groupedByDate[date]) {
+            groupedByDate[date] = [];
+          }
+        
+          groupedByDate[date].push(value);
+        }
+        
+        
+        // Sort dates chronologically
+        var uniqueDates = Object.keys(groupedByDate).sort();
+        
+        var groupedDates = [];
+        var groupedNDVI = [];
+        
+        for (var i = 0; i < uniqueDates.length; i++) {
+        
+          var date = uniqueDates[i];
+          var values = groupedByDate[date];
+        
+          var sum = 0;
+        
+          for (var j = 0; j < values.length; j++) {
+            sum += values[j];
+          }
+        
+          var meanValue = sum / values.length;
+        
+          groupedDates.push(date);
+          groupedNDVI.push(meanValue);
+        }
+        
+        
+        // Replace original arrays with daily grouped series
+        dateArray = groupedDates;
+        ndviArray = groupedNDVI;
+        
+        
+        // ===============================
+        // Standardized outlier filtering
+        // ===============================
+        
+        if (filterOutliers) {
+        
+          var filteredDates = [];
+          var filteredValues = [];
+        
+          var halfOutlierWindow = Math.floor(outlierWindow / 2);
         
           for (var i = 0; i < ndviArray.length; i++) {
         
-            var start = Math.max(0, i - halfWindow);
-            var end = Math.min(ndviArray.length, i + halfWindow + 1);
+            var start = Math.max(0, i - halfOutlierWindow);
+            var end = Math.min(ndviArray.length, i + halfOutlierWindow + 1);
         
-            var predictors = [];
-            var response = [];
+            var localValues = [];
         
             for (var j = start; j < end; j++) {
-        
-              var t = j - i;
-        
-              predictors.push([
-                1,
-                t,
-                Math.pow(t, 2),
-                Math.pow(t, 3)
-              ]);
-        
-              response.push([
-                ndviArray[j]
-              ]);
+              if (ndviArray[j] !== null && !isNaN(ndviArray[j])) {
+                localValues.push(ndviArray[j]);
+              }
             }
         
-            // precisa de pontos suficientes
-            if (predictors.length < order + 1) {
-              smoothedNDVI.push(ndviArray[i]);
+            // Same minimum number of observations used in Pandas
+            if (localValues.length < 3) {
+              filteredDates.push(dateArray[i]);
+              filteredValues.push(ndviArray[i]);
               continue;
             }
         
-            // ee.Array
-            var X = ee.Array(predictors);
+            localValues.sort(function(a, b) {
+              return a - b;
+            });
         
-            var Y = ee.Array(response);
+            var middle = Math.floor(localValues.length / 2);
+            var localMedian;
         
-            // regressão local
-            var coeffs = X.matrixSolve(Y);
+            if (localValues.length % 2 === 0) {
+              localMedian =
+                (localValues[middle - 1] + localValues[middle]) / 2;
+            } else {
+              localMedian = localValues[middle];
+            }
         
-            // valor suavizado no centro
-            var smoothValue = coeffs.get([0, 0]);
+            var difference = Math.abs(
+              ndviArray[i] - localMedian
+            );
         
-            smoothedNDVI.push(smoothValue.getInfo());
+            if (difference <= outlierThreshold) {
+        
+              filteredDates.push(dateArray[i]);
+              filteredValues.push(ndviArray[i]);
+        
+            } else {
+        
+              print(
+                "Outlier removed:",
+                dateArray[i],
+                "NDVI:",
+                ndviArray[i],
+                "Local median:",
+                localMedian,
+                "Difference:",
+                difference
+              );
+            }
           }
         
-        } else if (smoothing === "dma3") {
-          smoothedNDVI = movingAverage(ndviArray, 3);
-        
-        } else if (smoothing === "dma5") {
-          smoothedNDVI = movingAverage(ndviArray, 5);
+          dateArray = filteredDates;
+          ndviArray = filteredValues;
         }
+        
+        
+        var smoothedNDVI = [];
+
+      // ===============================
+      // 1. Standardized smoothing
+      // ===============================
+      
+      if (smoothing === "savgol") {
+      
+        // Equivalent to scipy.signal.savgol_filter(
+        //   ndviArray,
+        //   window_length = 7,
+        //   polyorder = 2,
+        //   mode = 'interp'
+        // )
+      
+        if (savgolWindow !== 7 || savgolPoly !== 2) {
+          throw new Error(
+            "Current SavGol implementation requires window=7 and poly=2."
+          );
+        }
+      
+        if (ndviArray.length < 7) {
+          throw new Error(
+            "SavGol window=7 requires at least 7 observations."
+          );
+        }
+      
+        smoothedNDVI = new Array(ndviArray.length);
+      
+      
+        // ==========================================
+        // Helper: quadratic least-squares fit
+        // for x = 0,1,2,3,4,5,6
+        // ==========================================
+      
+        function quadraticFit7(values) {
+      
+          var Sy = 0;
+          var Sxy = 0;
+          var Sx2y = 0;
+      
+          for (var k = 0; k < 7; k++) {
+      
+            var y = Number(values[k]);
+      
+            Sy += y;
+            Sxy += k * y;
+            Sx2y += k * k * y;
+          }
+      
+      
+          var A = [
+            [7, 21, 91, Sy],
+            [21, 91, 441, Sxy],
+            [91, 441, 2275, Sx2y]
+          ];
+      
+      
+          // Gaussian elimination
+          for (var col = 0; col < 3; col++) {
+      
+            var pivotRow = col;
+      
+            for (var row = col + 1; row < 3; row++) {
+      
+              if (
+                Math.abs(A[row][col]) >
+                Math.abs(A[pivotRow][col])
+              ) {
+                pivotRow = row;
+              }
+            }
+      
+      
+            var temp = A[col];
+            A[col] = A[pivotRow];
+            A[pivotRow] = temp;
+      
+      
+            var pivot = A[col][col];
+      
+            for (var j = col; j < 4; j++) {
+              A[col][j] /= pivot;
+            }
+      
+      
+            for (var row = 0; row < 3; row++) {
+      
+              if (row === col) {
+                continue;
+              }
+      
+              var factor = A[row][col];
+      
+              for (var j = col; j < 4; j++) {
+                A[row][j] -= factor * A[col][j];
+              }
+            }
+          }
+      
+      
+          return [
+            A[0][3],
+            A[1][3],
+            A[2][3]
+          ];
+        }
+      
+      
+        function quadraticValue(coeffs, x) {
+      
+          return (
+            coeffs[0] +
+            coeffs[1] * x +
+            coeffs[2] * x * x
+          );
+        }
+      
+      
+        // ==========================================
+        // INTERIOR
+        // SavGol window=7, poly=2
+        //
+        // coefficients:
+        // [-2, 3, 6, 7, 6, 3, -2] / 21
+        // ==========================================
+      
+        for (
+          var i = 3;
+          i < ndviArray.length - 3;
+          i++
+        ) {
+      
+          smoothedNDVI[i] =
+            (
+              -2 * ndviArray[i - 3] +
+               3 * ndviArray[i - 2] +
+               6 * ndviArray[i - 1] +
+               7 * ndviArray[i] +
+               6 * ndviArray[i + 1] +
+               3 * ndviArray[i + 2] -
+               2 * ndviArray[i + 3]
+            ) / 21;
+        }
+      
+      
+        // ==========================================
+        // LEFT EDGE
+        // scipy mode='interp'
+        // ==========================================
+      
+        var leftValues =
+          ndviArray.slice(0, 7);
+      
+        var leftCoeffs =
+          quadraticFit7(leftValues);
+      
+      
+        smoothedNDVI[0] =
+          quadraticValue(leftCoeffs, 0);
+      
+        smoothedNDVI[1] =
+          quadraticValue(leftCoeffs, 1);
+      
+        smoothedNDVI[2] =
+          quadraticValue(leftCoeffs, 2);
+      
+      
+        // ==========================================
+        // RIGHT EDGE
+        // scipy mode='interp'
+        // ==========================================
+      
+        var rightStart =
+          ndviArray.length - 7;
+      
+        var rightValues =
+          ndviArray.slice(rightStart);
+      
+        var rightCoeffs =
+          quadraticFit7(rightValues);
+      
+      
+        smoothedNDVI[ndviArray.length - 3] =
+          quadraticValue(rightCoeffs, 4);
+      
+        smoothedNDVI[ndviArray.length - 2] =
+          quadraticValue(rightCoeffs, 5);
+      
+        smoothedNDVI[ndviArray.length - 1] =
+          quadraticValue(rightCoeffs, 6);
+      
+      
+      } else if (smoothing === "dma3") {
+      
+        smoothedNDVI =
+          movingAverage(ndviArray, 3);
+      
+      } else if (smoothing === "dma5") {
+      
+        smoothedNDVI =
+          movingAverage(ndviArray, 5);
+      }
+      
+
+
+        // 2. Extração de Métricas Padronizada (Derivada Temporal Real)
         function extractMetrics(dates, values) {
-          var max = -Infinity, posIdx = 0;
-          for (var i = 0; i < values.length; i++) {
-            if (values[i] > max) { max = values[i]; posIdx = i; }
+          var n = values.length;
+          if (n < 5) return null;
+
+          // Converter datas para contagem real de dias corridos
+          var baseMetricTime =
+            Date.parse(dates[0] + 'T00:00:00Z');
+          
+          var days = dates.map(function(d) {
+          
+            var currentMetricTime =
+              Date.parse(d + 'T00:00:00Z');
+          
+            return (
+              currentMetricTime - baseMetricTime
+            ) / (1000 * 60 * 60 * 24);
+          });
+
+          // Real temporal derivative equivalent to numpy.gradient
+          // for irregular temporal spacing
+          var derivative = [];
+          
+          for (var i = 0; i < n; i++) {
+          
+            if (i === 0) {
+          
+              derivative.push(
+                (values[1] - values[0]) /
+                (days[1] - days[0])
+              );
+          
+            } else if (i === n - 1) {
+          
+              derivative.push(
+                (values[n - 1] - values[n - 2]) /
+                (days[n - 1] - days[n - 2])
+              );
+          
+            } else {
+          
+              var h1 = days[i] - days[i - 1];
+              var h2 = days[i + 1] - days[i];
+          
+              var a = -h2 / (h1 * (h1 + h2));
+              var b = (h2 - h1) / (h1 * h2);
+              var c = h1 / (h2 * (h1 + h2));
+          
+              derivative.push(
+                a * values[i - 1] +
+                b * values[i] +
+                c * values[i + 1]
+              );
+            }
           }
-  
-          var sosIdx = 0;
-          for (var i = 1; i < posIdx; i++) {
-            if (values[i] - values[i - 1] > 0.01) { sosIdx = i - 1; break; }
+
+          // A. POS (Pico global na série suavizada)
+          var maxVal = -Infinity;
+          var posIdx = 0;
+          for (var i = 0; i < n; i++) {
+            if (values[i] > maxVal) {
+              maxVal = values[i];
+              posIdx = i;
+            }
           }
-  
-          var eosIdx = posIdx;
-          var minAfterPos = values[posIdx];
-          for (var i = posIdx + 1; i < values.length; i++) {
-            if (values[i] < minAfterPos) { minAfterPos = values[i]; eosIdx = i; }
+
+          // B. SOS (First point of sustained pre-peak growth)
+          var sosIdx = null;
+          var consecutiveGrowth = 0;
+          
+          for (var i = 0; i < posIdx; i++) {
+          
+            if (derivative[i] > positiveDerivThreshold) {
+          
+              consecutiveGrowth++;
+          
+              if (consecutiveGrowth >= minConsecutive) {
+          
+                // First point of sustained growth
+                sosIdx = Math.max(
+                  0,
+                  i - minConsecutive + 1
+                );
+          
+                break;
+              }
+          
+            } else {
+          
+              consecutiveGrowth = 0;
+            }
           }
-  
+
+          if (sosIdx === null) {
+            var minPre = values[0];
+            sosIdx = 0;
+            for (var i = 0; i < posIdx; i++) {
+              if (values[i] < minPre) {
+                minPre = values[i];
+                sosIdx = i;
+              }
+            }
+          }
+
+          // C. EOS (Pós-pico: queda < -0.002 até estabilização com derivada >= 0)
+          var eosIdx = null;
+          var consecutiveDecline = 0;
+          var foundDecline = false;
+          for (var i = posIdx; i < n; i++) {
+            if (derivative[i] < negativeDerivThreshold) {
+              consecutiveDecline++;
+            
+              if (consecutiveDecline >= minConsecutive) {
+                foundDecline = true;
+              }
+            }
+            if (foundDecline && derivative[i] >= 0) {
+              eosIdx = i;
+              break;
+            }
+          }
+
+          if (eosIdx === null) {
+            var minPost = values[posIdx];
+            eosIdx = posIdx;
+            for (var i = posIdx; i < n; i++) {
+              if (values[i] <= minPost) {
+                minPost = values[i];
+                eosIdx = i;
+              }
+            }
+          }
+
           var amp = values[posIdx] - values[sosIdx];
-          var dur = (new Date(dates[eosIdx]) - new Date(dates[sosIdx])) / (1000*60*60*24);
-  
-          return { SOS: sosIdx, POS: posIdx, EOS: eosIdx, AMP: amp, DUR: dur, MAX: max };
+          var dur = Math.round(days[eosIdx] - days[sosIdx]);
+
+          return {
+            SOS: sosIdx,
+            POS: posIdx,
+            EOS: eosIdx,
+            AMP: amp,
+            DUR: dur,
+            MAX: maxVal
+          };
         }
   
         var metrics = extractMetrics(dateArray, smoothedNDVI);
+        if (!metrics) {
+          print("Unable to extract metrics: time series too short.");
+          return;
+        }
   
         print(title + ' - Phenological Metrics:');
-        print('SOS:', dateArray[metrics.SOS], smoothedNDVI[metrics.SOS]);
-        print('POS:', dateArray[metrics.POS], smoothedNDVI[metrics.POS]);
-        print('EOS:', dateArray[metrics.EOS], smoothedNDVI[metrics.EOS]);
-        print('Amplitude:', metrics.AMP);
+        print('SOS:', dateArray[metrics.SOS], smoothedNDVI[metrics.SOS].toFixed(4));
+        print('POS:', dateArray[metrics.POS], smoothedNDVI[metrics.POS].toFixed(4));
+        print('EOS:', dateArray[metrics.EOS], smoothedNDVI[metrics.EOS].toFixed(4));
+        print('Amplitude:', metrics.AMP.toFixed(4));
         print('Duration (days):', metrics.DUR);
-        print('MAX NDVI:', metrics.MAX.toFixed(2));
+        print('MAX NDVI:', metrics.MAX.toFixed(4));
   
         var metricsFeature = ee.Feature(null, {
           'SOS_date': dateArray[metrics.SOS],
@@ -296,12 +901,11 @@ function runAnalysis(samples) {
           'EOS_ndvi': smoothedNDVI[metrics.EOS],
           'Amplitude': metrics.AMP,
           'Duration': metrics.DUR,
-          'MAX_NDVI': metrics.MAX.toFixed(2)
+          'MAX_NDVI': metrics.MAX
         });
         
         var metricsFC = ee.FeatureCollection([metricsFeature]);
 
-        // Use this script to export phenological metrics to drive
         Export.table.toDrive({
           collection: metricsFC,
           description: 'ndvi_metrics',
@@ -309,140 +913,350 @@ function runAnalysis(samples) {
           fileFormat: 'CSV'
         });
   
-        var baseDate = new Date(dateArray[0]);
-        function daysSinceStart(dateStr) {
-          return Math.round((new Date(dateStr) - baseDate) / (1000*60*60*24));
-        }
-  
         var chartData = [];
-
+        
+        // Build chart data using numeric timestamps
         for (var i = 0; i < dateArray.length; i++) {
         
+          var timestamp =
+            Date.parse(dateArray[i] + 'T00:00:00Z');
+        
           chartData.push({
-        
-            day: daysSinceStart(dateArray[i]),
+            time: timestamp,
             date: dateArray[i],
-        
-            // REAL Sentinel-2 point
             NDVI_original: ndviArray[i],
-
-            // Smoothed curve
-            NDVI_smoothed: smoothedNDVI[i],
+            NDVI_smoothed: smoothedNDVI[i]
           });
         }
         
-        // ===============================
-        // Exporting time series
-        // ===============================
-        var exportFC = ee.FeatureCollection(
         
+        // ===============================
+        // Export NDVI time series
+        // ===============================
+        
+        var exportFC = ee.FeatureCollection(
           chartData.map(function(d) {
             return ee.Feature(null, {
               'date': d.date,
-        
-              // Raw Sentinel-2 observation
               'NDVI_original': d.NDVI_original,
-        
-              // Smoothed curve
-              'NDVI_smoothed': d.NDVI_smoothed,
+              'NDVI_smoothed': d.NDVI_smoothed
             });
           })
         );
         
-        // Use this script to export ndvi values to drive
         Export.table.toDrive({
           collection: exportFC,
           description: 'NDVI_series',
           folder: 'phenoCrops',
           fileFormat: 'CSV'
         });
-
-  
-        var phenologyPoints = [
-          {day: daysSinceStart(dateArray[metrics.SOS]), NDVI: smoothedNDVI[metrics.SOS], type: 'SOS'},
-          {day: daysSinceStart(dateArray[metrics.POS]), NDVI: smoothedNDVI[metrics.POS], type: 'POS'},
-          {day: daysSinceStart(dateArray[metrics.EOS]), NDVI: smoothedNDVI[metrics.EOS], type: 'EOS'}
-        ];
-  
-        // REAL Sentinel-2 observations
-        var originalFC = ee.FeatureCollection(
-          chartData.map(function(d) {
         
-            return ee.Feature(null, {
-              'day': d.day,
-              'NDVI': d.NDVI_original,
-              'type': 'Original'
-            });
         
-          })
+        // ===============================
+        // Build chart with phenological metrics
+        // ===============================
+        
+        // Create numeric series
+        var xValues = [];
+        var originalValues = [];
+        var smoothedValues = [];
+        var sosValues = [];
+        var posValues = [];
+        var eosValues = [];
+        
+        for (var i = 0; i < dateArray.length; i++) {
+        
+          xValues.push(i);
+          originalValues.push(Number(ndviArray[i]));
+          smoothedValues.push(Number(smoothedNDVI[i]));
+        
+          // Use the smoothed curve as a hidden baseline.
+          // Only the phenological position will be highlighted later.
+          sosValues.push(Number(smoothedNDVI[i]));
+          posValues.push(Number(smoothedNDVI[i]));
+          eosValues.push(Number(smoothedNDVI[i]));
+        }
+        
+        
+        // ===============================
+        // Build explicit date ticks
+        // ===============================
+        
+        var ticks = [];
+        var numberOfTicks = 8;
+        
+        var tickStep = Math.max(
+          1,
+          Math.floor(
+            (dateArray.length - 1) /
+            (numberOfTicks - 1)
+          )
         );
         
-        // Smoothed curve
-        var smoothedFC = ee.FeatureCollection(
-          chartData.map(function(d) {
-            return ee.Feature(null, {
-              'day': d.day,
-              'NDVI': d.NDVI_smoothed,
-              'type': 'Smoothed'
-            });
-          })
-        );
-  
-        var phenologyFC = ee.FeatureCollection(
-          phenologyPoints.map(function(p) {
-            return ee.Feature(null, {'day': p.day, 'NDVI': p.NDVI, 'type': p.type});
-          })
-        );
-  
-        var allFC = originalFC
-          .merge(smoothedFC)
-          .merge(phenologyFC);
+        for (
+          var i = 0;
+          i < dateArray.length;
+          i += tickStep
+        ) {
         
-        var chart = ui.Chart.feature.groups(allFC, 'day', 'NDVI', 'type')
-          .setChartType('LineChart')
-          .setOptions({
-            title: title + ' with Phenological Metrics (' + aggregation + ' and ' + smoothing + ')',
-            hAxis: {title: 'Days since start', gridlines: {count: 10}},
-            vAxis: {title: 'NDVI (' + aggregation + ')'},
-            pointSize: 4,
-            
-            series: {
-              // Original Sentinel-2 points
-              0: {
-                color: 'black',
-                pointShape: 'circle',
-                lineWidth: 0,
-                pointSize: 5
-              },
-              // Smoothed curve
-              1: {
-                color: 'gray',
-                lineWidth: 2,
-                pointSize: 0
-              },
-              // SOS
-              2: {
-                color: 'green',
-                lineWidth: 0,
-                pointSize: 7
-              },
-              // POS
-              3: {
-                color: 'purple',
-                lineWidth: 0,
-                pointSize: 7
-              },
-              // EOS
-              4: {
-                color: 'red',
-                lineWidth: 0,
-                pointSize: 7
-              }
-            },
-            
-            legend: {position: 'bottom'}
+          var parts = dateArray[i].split('-');
+        
+          ticks.push({
+            v: i,
+            f:
+              parts[2] + '/' +
+              parts[1] + '/' +
+              parts[0]
           });
-  
+        }
+        
+        
+        // Always include the last date
+        var lastIndex = dateArray.length - 1;
+        
+        if (
+          ticks.length === 0 ||
+          ticks[ticks.length - 1].v !== lastIndex
+        ) {
+        
+          var lastParts =
+            dateArray[lastIndex].split('-');
+        
+          ticks.push({
+            v: lastIndex,
+            f:
+              lastParts[2] + '/' +
+              lastParts[1] + '/' +
+              lastParts[0]
+          });
+        }
+        
+        
+        // ===============================
+        // Create main chart features
+        // ===============================
+        
+        var chartFeatures = [];
+        
+        for (var i = 0; i < dateArray.length; i++) {
+        
+          chartFeatures.push(
+            ee.Feature(null, {
+              'x': i,
+              'Original': Number(ndviArray[i]),
+              'Smoothed': Number(smoothedNDVI[i])
+            })
+          );
+        }
+        
+        var chartFC = ee.FeatureCollection(chartFeatures);
+        
+        
+        // ===============================
+        // Chart data
+        // ===============================
+        
+        var chartFeatures = [];
+        
+        // Original NDVI
+        for (var i = 0; i < dateArray.length; i++) {
+        
+          chartFeatures.push(
+            ee.Feature(null, {
+              'x': i,
+              'NDVI': Number(ndviArray[i]),
+              'series': 'Real NDVI'
+            })
+          );
+        }
+        
+        // Smoothed NDVI
+        for (var i = 0; i < dateArray.length; i++) {
+        
+          chartFeatures.push(
+            ee.Feature(null, {
+              'x': i,
+              'NDVI': Number(smoothedNDVI[i]),
+              'series': 'Smoothed'
+            })
+          );
+        }
+        
+        
+        // ===============================
+        // Phenological points
+        // ===============================
+        
+        chartFeatures.push(
+          ee.Feature(null, {
+            'x': metrics.SOS,
+            'NDVI': Number(smoothedNDVI[metrics.SOS]),
+            'series': 'SOS'
+          })
+        );
+        
+        chartFeatures.push(
+          ee.Feature(null, {
+            'x': metrics.POS,
+            'NDVI': Number(smoothedNDVI[metrics.POS]),
+            'series': 'POS'
+          })
+        );
+        
+        chartFeatures.push(
+          ee.Feature(null, {
+            'x': metrics.EOS,
+            'NDVI': Number(smoothedNDVI[metrics.EOS]),
+            'series': 'EOS'
+          })
+        );
+        
+        var chartFC = ee.FeatureCollection(chartFeatures);
+        
+        
+        // ===============================
+        // BUILD CHART USING REAL TIMESTAMPS
+        // ===============================
+        
+        var chartFeatures = [];
+        
+        for (var i = 0; i < dateArray.length; i++) {
+        
+          var timestamp = Date.parse(
+            dateArray[i] + 'T00:00:00Z'
+          );
+        
+          // Original NDVI
+          chartFeatures.push(
+            ee.Feature(null, {
+              'time': timestamp,
+              'NDVI': Number(ndviArray[i]),
+              'series': 'Real NDVI'
+            })
+          );
+        
+          // Smoothed NDVI
+          chartFeatures.push(
+            ee.Feature(null, {
+              'time': timestamp,
+              'NDVI': Number(smoothedNDVI[i]),
+              'series': 'Smoothed'
+            })
+          );
+        }
+        
+        
+        // SOS
+        chartFeatures.push(
+          ee.Feature(null, {
+            'time': Date.parse(
+              dateArray[metrics.SOS] + 'T00:00:00Z'
+            ),
+            'NDVI': Number(smoothedNDVI[metrics.SOS]),
+            'series': 'SOS'
+          })
+        );
+        
+        
+        // POS
+        chartFeatures.push(
+          ee.Feature(null, {
+            'time': Date.parse(
+              dateArray[metrics.POS] + 'T00:00:00Z'
+            ),
+            'NDVI': Number(smoothedNDVI[metrics.POS]),
+            'series': 'POS'
+          })
+        );
+        
+        
+        // EOS
+        chartFeatures.push(
+          ee.Feature(null, {
+            'time': Date.parse(
+              dateArray[metrics.EOS] + 'T00:00:00Z'
+            ),
+            'NDVI': Number(smoothedNDVI[metrics.EOS]),
+            'series': 'EOS'
+          })
+        );
+        
+        
+        var chartFC = ee.FeatureCollection(chartFeatures);
+        
+        
+        var chart = ui.Chart.feature.groups(
+          chartFC,
+          'time',
+          'NDVI',
+          'series'
+        )
+        .setChartType('LineChart')
+        .setOptions({
+        
+          title:
+            title +
+            ' (' +
+            aggregation +
+            ' and ' +
+            smoothing +
+            ')',
+        
+          hAxis: {
+            title: 'Date',
+            format: 'dd/MM/yyyy',
+            slantedText: true,
+            slantedTextAngle: 45
+          },
+        
+          vAxis: {
+            title: 'NDVI (' + aggregation + ')',
+            viewWindow: {
+              min: 0,
+              max: 1
+            }
+          },
+        
+          pointSize: 0,
+        
+          series: {
+        
+            0: {
+              color: 'black',
+              lineWidth: 0,
+              pointSize: 4
+            },
+        
+            1: {
+              color: 'gray',
+              lineWidth: 2,
+              pointSize: 0
+            },
+        
+            2: {
+              color: 'yellow',
+              lineWidth: 0,
+              pointSize: 7
+            },
+        
+            3: {
+              color: 'green',
+              lineWidth: 0,
+              pointSize: 7
+            },
+        
+            4: {
+              color: 'purple',
+              lineWidth: 0,
+              pointSize: 7
+            }
+          },
+        
+          legend: {
+            position: 'bottom'
+          }
+        });
+        
         print(chart);
       });
     });
@@ -492,4 +1306,12 @@ function runAnalysis(samples) {
     fileFormat: "SHP"
   });
   */
+  
+  Export.table.toDrive({
+  collection: samples,
+  description: 'GEE_drawn_sample',
+  folder: 'phenoCrops',
+  fileNamePrefix: 'GEE_drawn_sample',
+  fileFormat: 'SHP'
+});
 }
